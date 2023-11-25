@@ -52,6 +52,11 @@ function parseItemMeta(node, into) {
                 break;
             case 3:
                 // 22:51:00.171/D: path: .1.0.3, text: 2023-11-25 11:24
+                // 22:51:00.172/D: path: .1.0.3, text: 今天 11:24
+                if (val.indexOf("今天") != -1) {
+                    val = val.replace("今天", nowDate());
+                    log("替换今天 -> " + val);
+                }
                 into.date = val;
                 break;
         }
@@ -81,7 +86,9 @@ function parseItem(node, cond) {
         }
         if (!endlist) {
             j++; // 订单列表占两个节点，跳过第二个
-            data.items.push(val + " " + node.child(j).text()); // 价格
+            var price = node.child(j).text(); // 价格
+            // 暂时不显示单价
+            data.items.push(val);
             continue;
         }
         // 开始解析订单总计
@@ -173,9 +180,8 @@ function look(cond) {
 function saveToFile(filename, data) {
     var filename = "/sdcard/Documents/" + filename + ".csv";
     var file = open(filename, "w");
-    file.write("桌号,类型,时间,总价,总件数,总计,地址,留言,内容\n");
-    for (var id in data) {
-        var item = data[id];
+    file.write("地址,留言,内容\n");
+    data.forEach(function (item) {
         msg = item.message;
         if (!msg) {
             msg = "";
@@ -184,16 +190,6 @@ function saveToFile(filename, data) {
         }
         addr = item.address;
         var line =
-            item.table +
-            "," +
-            item.type +
-            "," +
-            item.date +
-            "," +
-            item.totalPrice +
-            "," +
-            item.totalcount +
-            "," +
             addr +
             "," +
             msg +
@@ -201,7 +197,7 @@ function saveToFile(filename, data) {
             item.items.join(" ") +
             "\n";
         file.write(line);
-    }
+    });
     file.close();
     log("已经保存到文件: " + filename);
     toast("已经保存到文件: " + filename);
@@ -211,6 +207,17 @@ function debug_printTree() {
     foreachPath(selector().findOnce(), function (node, path) {
         log("path: " + path + ", text: " + node.text());
     });
+}
+
+function yesterday(date) {
+    var today = new Date(date);
+    today.setTime(today.getTime() - 24 * 60 * 60 * 1000);
+    return today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate();
+}
+
+function nowDate() {
+    var today = new Date();
+    return today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate();
 }
 
 // 先进入店员通页面
@@ -262,50 +269,42 @@ toast("刷新中...");
 swipe(540, 400, 540, 1000, 500);
 sleep(3000);
 
-totallist = {};
-curDate = "";
-shouldStop = false;
-mintable = 99999;
+var totallist = {};
+var curDate = "";
+var yesterdayDate = "";
+var shouldStop = false;
 toast("开始解析订单,期间请勿操作...");
 while (true) {
-    if (mintable == 1) {
-        toast("最小订单号为1,已完成...");
-        break;
-    }
     if (shouldStop) {
-        toast("今日订单已全部扫描,已完成...");
+        toast("订单已全部扫描,已完成...");
         break;
     }
     var newlist = look(function (data) {
         if (totallist[data.id]) {
             return false;
         }
+        // 忽略前日 21.20 前的订单
+        // js 日期字符串比较？？？
+        if (curDate !== "" && data.date < yesterdayDate + " 21:20") {
+            log("忽略前日订单: " + data.date);
+            shouldStop = true; // 如果出现被忽略的日期，则不再继续下一轮扫描
+            return false;
+        }
         return true;
     });
     newlist.forEach(function (v) {
-        // 2023-11-25 14:06,32.00
+        // 2023-11-25 14:06
         today = v.date.split(" ")[0];
         if (curDate === "") {
-            toast("当前日期: " + today);
+            log("当前日期: " + today);
             curDate = today;
+            yesterdayDate = yesterday(today);
         }
-        if (today !== curDate) {
-            log("忽略非当日订单: " + today);
-            shouldStop = true;
+        if (totallist[v.id]) {
             return;
         }
-        var id = v.id;
-        if (totallist[id]) {
-            // log("忽略已经存在的订单: " + id);
-            return;
-        }
-        var table = v.table; // 每日订单编号
-        if (table < mintable) {
-            mintable = table;
-            // log("最小订单号: " + table);
-        }
-        totallist[id] = v;
-        log("新订单: " + table);
+        totallist[v.id] = v;
+        log("新订单: " + v.id);
     });
     // 上滑加载
     swipe(540, 1600, 540, 300, 200);
@@ -319,8 +318,32 @@ while (true) {
 
 toast("一共解析到" + Object.keys(totallist).length + "个订单");
 
+// 时间筛选21.20-次日11.20  11.20-17.30 17.30-21.20
+lunchList = [];
+afternoonList = [];
+dinnerList = [];
+
+for (var i in totallist) {
+    var val = totallist[i];
+    if (val.date < (curDate + " 11:20")) {
+        lunchList.push(val);
+    } else if (val.date < (curDate + " 17:30")) {
+        afternoonList.push(val);
+    } else {
+        dinnerList.push(val);
+    }
+};
+
 // 保存到文件
-saveToFile(curDate, totallist);
+if (lunchList.length > 0) {
+    saveToFile(curDate + "-午饭", lunchList);
+}
+if (afternoonList.length > 0) {
+    saveToFile(curDate + "-晚饭", afternoonList);
+}
+if (dinnerList.length > 0) {
+    saveToFile(curDate + "-夜宵", dinnerList);
+}
 
 sleep(1000);
 back();
