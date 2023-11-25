@@ -1,0 +1,10 @@
+{
+    "name": "店员通订单页面自动抓取",
+    "main": "main.js",
+    "ignore": [
+        "build"
+    ],
+    "packageName": "com.trusted-home.autolistorders",
+    "versionName": "1.0.0",
+    "versionCode": 1
+}
