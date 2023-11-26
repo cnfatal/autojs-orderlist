@@ -290,8 +290,6 @@ while (true) {
             shouldStop = true; // 如果出现被忽略的日期，则不再继续下一轮扫描
             return false;
         }
-        shouldStop = true; // 如果出现被忽略的日期，则不再继续下一轮扫描
-
         return true;
     });
     newlist.forEach(function (v) {
