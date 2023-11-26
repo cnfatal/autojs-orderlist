@@ -183,7 +183,7 @@ function look(cond) {
 function saveToFile(filename, list) {
     var filename = "/sdcard/Documents/" + filename + ".csv";
     var file = open(filename, "w");
-    file.write("地址,留言,内容\n");
+    file.write("序号,地址,留言,内容\n");
     list.forEach(function (item) {
         var msg = item.message;
         if (!msg) {
@@ -191,7 +191,7 @@ function saveToFile(filename, list) {
         } else {
             msg = "【备注：" + msg + "】";
         }
-        file.writeline(item.address + "," + msg + "," + item.content);
+        file.writeline(item.id, item.address + "," + msg + "," + item.content);
     });
     file.flush();
     file.close();
