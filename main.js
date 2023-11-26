@@ -55,7 +55,6 @@ function parseItemMeta(node, into) {
                 // 22:51:00.172/D: path: .1.0.3, text: 今天 11:24
                 if (val.indexOf("今天") != -1) {
                     val = val.replace("今天", nowDate());
-                    log("替换今天 -> " + val);
                 }
                 into.date = val;
                 break;
@@ -65,16 +64,14 @@ function parseItemMeta(node, into) {
 }
 
 function parseItem(node, cond) {
-    var data = {
-        items: [],
-    };
+    var data = {};
     var endlist = false;
     for (var j = 0; j < node.childCount(); j++) {
         // 解析订单基本信息
         if (j == 0) {
             parseItemMeta(node.child(j), data);
             // 检查订单是否符合条件
-            if (!cond(data)) {
+            if (cond && !cond(data)) {
                 return null;
             }
             continue;
@@ -85,10 +82,18 @@ function parseItem(node, cond) {
             endlist = true;
         }
         if (!endlist) {
-            j++; // 订单列表占两个节点，跳过第二个
-            var price = node.child(j).text(); // 价格
-            // 暂时不显示单价
-            data.items.push(val);
+            // 订单列表无法准确区分，合到一起计算
+            // 19:46:35.818/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.4.1, text: 蛋挞（甜品无饭） x 1
+            // 19:46:35.819/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.4.2, text: ￥11.00
+            // 19:46:35.820/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.4.3, text: (一份四个)
+            // 19:46:35.821/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.4.4, text: 共1件
+            // 19:46:35.823/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.4.5, text: 总计
+
+            // 忽略价格
+            if (val.indexOf("￥") != -1) {
+                continue;
+            }
+            data.content = data.content ? data.content + " " + val : val;
             continue;
         }
         // 开始解析订单总计
@@ -159,12 +164,10 @@ function parseContent(node, cond) {
 }
 
 function look(cond) {
-    // 忽略新订单
     if (false) {
         var refresh = text("您有新的订单").findOnce();
         if (refresh) {
             toast("有新订单... 刷新...");
-            log("有新订单... 刷新...");
             refresh.click();
             sleep(3000);
         }
@@ -177,27 +180,20 @@ function look(cond) {
     }
 }
 
-function saveToFile(filename, data) {
+function saveToFile(filename, list) {
     var filename = "/sdcard/Documents/" + filename + ".csv";
     var file = open(filename, "w");
     file.write("地址,留言,内容\n");
-    data.forEach(function (item) {
-        msg = item.message;
+    list.forEach(function (item) {
+        var msg = item.message;
         if (!msg) {
             msg = "";
         } else {
             msg = "【备注：" + msg + "】";
         }
-        addr = item.address;
-        var line =
-            addr +
-            "," +
-            msg +
-            "," +
-            item.items.join(" ") +
-            "\n";
-        file.write(line);
+        file.writeline(item.address + "," + msg + "," + item.content);
     });
+    file.flush();
     file.close();
     log("已经保存到文件: " + filename);
     toast("已经保存到文件: " + filename);
@@ -212,12 +208,16 @@ function debug_printTree() {
 function yesterday(date) {
     var today = new Date(date);
     today.setTime(today.getTime() - 24 * 60 * 60 * 1000);
-    return today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate();
+    return (
+        today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate()
+    );
 }
 
 function nowDate() {
     var today = new Date();
-    return today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate();
+    return (
+        today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate()
+    );
 }
 
 // 先进入店员通页面
@@ -286,25 +286,27 @@ while (true) {
         // 忽略前日 21.20 前的订单
         // js 日期字符串比较？？？
         if (curDate !== "" && data.date < yesterdayDate + " 21:20") {
-            log("忽略前日订单: " + data.date);
+            log("忽略前日订单: " + data.id);
             shouldStop = true; // 如果出现被忽略的日期，则不再继续下一轮扫描
             return false;
         }
+        shouldStop = true; // 如果出现被忽略的日期，则不再继续下一轮扫描
+
         return true;
     });
     newlist.forEach(function (v) {
         // 2023-11-25 14:06
         today = v.date.split(" ")[0];
         if (curDate === "") {
-            log("当前日期: " + today);
+            log("设置当前日期: " + today);
             curDate = today;
             yesterdayDate = yesterday(today);
         }
         if (totallist[v.id]) {
             return;
         }
+        log("新订单: " + JSON.stringify(v));
         totallist[v.id] = v;
-        log("新订单: " + v.id);
     });
     // 上滑加载
     swipe(540, 1600, 540, 300, 200);
@@ -314,6 +316,16 @@ while (true) {
     sleep(100);
     swipe(540, 1600, 540, 300, 200);
     sleep(100);
+
+    // 等待 “加载中” 消失
+    for (var i = 0; i < 10; i++) {
+        var loading = selector().textContains("加载中").findOnce();
+        if (loading) {
+            sleep(300);
+            continue;
+        }
+        break;
+    }
 }
 
 toast("一共解析到" + Object.keys(totallist).length + "个订单");
@@ -325,25 +337,21 @@ dinnerList = [];
 
 for (var i in totallist) {
     var val = totallist[i];
-    if (val.date < (curDate + " 11:20")) {
+    if (val.date < curDate + " 11:20") {
+        log("午餐订单: " + val.id);
         lunchList.push(val);
-    } else if (val.date < (curDate + " 17:30")) {
+    } else if (val.date < curDate + " 17:30") {
+        log("晚餐订单: " + val.id);
         afternoonList.push(val);
     } else {
+        log("夜宵订单: " + val.id);
         dinnerList.push(val);
     }
-};
-
+}
 // 保存到文件
-if (lunchList.length > 0) {
-    saveToFile(curDate + "-午饭", lunchList);
-}
-if (afternoonList.length > 0) {
-    saveToFile(curDate + "-晚饭", afternoonList);
-}
-if (dinnerList.length > 0) {
-    saveToFile(curDate + "-夜宵", dinnerList);
-}
+saveToFile(curDate + "-lunch", lunchList);
+saveToFile(curDate + "-afternonn", afternoonList);
+saveToFile(curDate + "-dinner", dinnerList);
 
 sleep(1000);
 back();
