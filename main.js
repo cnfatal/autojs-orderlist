@@ -191,7 +191,7 @@ function saveToFile(filename, list) {
         } else {
             msg = "【备注：" + msg + "】";
         }
-        file.writeline(item.id, item.address + "," + msg + "," + item.content);
+        file.writeline(item.id + "," + item.address + "," + msg + "," + item.content);
     });
     file.flush();
     file.close();
