@@ -35,9 +35,21 @@ function findByPath(path) {
     });
 }
 
+/*
+20:57:27.999/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.173.0, text: 
+20:57:28.001/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.173.0.0, text: 60
+20:57:28.002/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.173.0.1, text: 桌号
+20:57:28.003/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.173.0.2, text: 到店订单
+20:57:28.004/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.173.0.3, text: 
+20:57:28.005/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.173.0.4, text: 今天 10:21
+*/
 function parseItemMeta(node, into) {
     for (var i = 0; i < node.childCount(); i++) {
         var val = node.child(i).text();
+        // ignore empty
+        if (!val) {
+            continue;
+        }
         switch (i) {
             case 0:
                 // 22:51:00.167/D: path: .1.0.0, text: 84
@@ -50,7 +62,7 @@ function parseItemMeta(node, into) {
                 // 22:51:00.170/D: path: .1.0.2, text: 到店订单
                 into.type = val;
                 break;
-            case 3:
+            case 3: case 4:
                 // 22:51:00.171/D: path: .1.0.3, text: 2023-11-25 11:24
                 // 22:51:00.172/D: path: .1.0.3, text: 今天 11:24
                 if (val.indexOf("今天") != -1) {
@@ -301,7 +313,7 @@ while (true) {
         // 忽略前日 21.20 前的订单
         // js 日期字符串比较？？？
         if (curDate !== "" && data.date < yesterdayDate + " 21:20") {
-            log("忽略前日订单: " + data.id);
+            log("忽略前日订单: %s %s", data.date, data.id);
             shouldStop = true; // 如果出现被忽略的日期，则不再继续下一轮扫描
             return false;
         }
@@ -318,7 +330,8 @@ while (true) {
         if (totallist[v.id]) {
             return;
         }
-        log("新订单: " + JSON.stringify(v));
+        // log("新订单: " + JSON.stringify(v));
+        log("新订单: " + v.id);
         totallist[v.id] = v;
     });
     // 上滑加载
