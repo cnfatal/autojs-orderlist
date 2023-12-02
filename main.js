@@ -191,7 +191,9 @@ function saveToFile(filename, list) {
         } else {
             msg = "【备注：" + msg + "】";
         }
-        file.writeline(item.id + "," + item.address + "," + msg + "," + item.content);
+        file.writeline(
+            item.id + "," + item.address + "," + msg + "," + item.content
+        );
     });
     file.flush();
     file.close();
@@ -206,7 +208,20 @@ function debug_printTree() {
 }
 
 function yesterday(date) {
-    var today = new Date(date);
+    var m = /(\d+)-(\d+)-(\d+)/.exec(date);
+    if (!m) {
+        return "";
+    }
+    var year = m[1];
+    var month = m[2];
+    var day = m[3];
+    if (month.length == 1) {
+        month = "0" + month;
+    }
+    if (day.length == 1) {
+        day = "0" + day;
+    }
+    var today = new Date(year + "-" + month + "-" + day);
     today.setTime(today.getTime() - 24 * 60 * 60 * 1000);
     return (
         today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate()
