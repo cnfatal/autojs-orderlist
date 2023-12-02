@@ -62,14 +62,15 @@ function parseItemMeta(node, into) {
                 // 22:51:00.170/D: path: .1.0.2, text: 到店订单
                 into.type = val;
                 break;
-            case 3: case 4:
+            case 3:
+            case 4:
                 // 22:51:00.171/D: path: .1.0.3, text: 2023-11-25 11:24
                 // 22:51:00.172/D: path: .1.0.3, text: 今天 11:24
                 if (val.indexOf("今天") != -1) {
                     val = val.replace("今天", nowDate());
                 }
-                // case of 2023-11-1
-                var m = /(\d+)-(\d+)-(\d+)/.exec(val);
+                // case of 2023-11-1 11:24
+                var m = /(\d+)-(\d+)-(\d+) (\d+):(\d+)/.exec(val);
                 if (m) {
                     var month = m[2];
                     var day = m[3];
@@ -79,7 +80,7 @@ function parseItemMeta(node, into) {
                     if (day.length == 1) {
                         day = "0" + day;
                     }
-                    val = m[1] + "-" + month + "-" + day;
+                    val = m[1] + "-" + month + "-" + day + " " + m[4] + ":" + m[5];
                 }
                 into.date = val;
                 break;
@@ -135,21 +136,30 @@ function parseItem(node, cond) {
                 break;
             }
             key = node.child(j).text();
+            /*
+            23:23:44.313/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.2.11, text: 留言
+            23:23:44.314/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.2.12, text: 饭量大 加饭
+            23:23:44.314/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.2.13, text: 
+            23:23:44.315/D: path: .0.0.0.1.1.0.1.1.1.0.0.0.2.14, text: 复制
+            */
             switch (key) {
                 case "必填":
                     j++; // skip
                     data.address = node.child(j).text();
                     j++; // skip
                     j++; // skip 复制
-                    j++; // skip 标记完成
+                    j++; // skip 
                     break;
                 case "留言":
                     j++; // skip
                     data.message = node.child(j).text();
                     j++; // skip
                     j++; // skip
-                    j++; // skip 标记完成
+                    j++; // skip 
                     break;
+                case "标记完成":
+                    data.unfinished = true;
+                    j++; // skip
                 default:
                     // 如果遇到其他信息，退出循环
                     break addtional;
@@ -219,6 +229,9 @@ function saveToFile(filename, list) {
         } else {
             msg = "【备注：" + msg + "】";
         }
+        if (!item.unfinished) {
+            msg = "【已完成】" + msg;
+        }
         file.writeline(
             item.id + "," + item.address + "," + msg + "," + item.content
         );
@@ -238,9 +251,15 @@ function debug_printTree() {
 function yesterday(date) {
     var today = new Date(date);
     today.setTime(today.getTime() - 24 * 60 * 60 * 1000);
-    return (
-        today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate()
-    );
+    var month = today.getMonth() + 1;
+    var day = today.getDate();
+    if (month < 10) {
+        month = "0" + month;
+    }
+    if (day < 10) {
+        day = "0" + day;
+    }
+    return today.getFullYear() + "-" + month + "-" + day;
 }
 
 function nowDate() {
@@ -248,6 +267,15 @@ function nowDate() {
     return (
         today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate()
     );
+}
+
+let debug = false;
+// debug = true;
+if (debug) {
+    debug_printTree();
+    list = look();
+    log(list);
+    exit();
 }
 
 // 先进入店员通页面
@@ -301,12 +329,13 @@ sleep(3000);
 
 var totallist = {};
 var curDate = "";
-var yesterdayDate = "";
+var minDateTime = "";
 var shouldStop = false;
 toast("开始解析订单,期间请勿操作...");
 while (true) {
     if (shouldStop) {
         toast("订单已全部扫描,已完成...");
+        log("stop while loop");
         break;
     }
     var newlist = look(function (data) {
@@ -315,25 +344,23 @@ while (true) {
         }
         // 忽略前日 21.20 前的订单
         // js 日期字符串比较？？？
-        if (curDate !== "" && data.date < yesterdayDate + " 21:20") {
-            log("忽略前日订单: %s %s", data.date, data.id);
+        if (curDate !== "" && data.date < minDateTime) {
+            log("忽略订单: %s < %s, id=%s", data.date, minDateTime, data.id);
             shouldStop = true; // 如果出现被忽略的日期，则不再继续下一轮扫描
             return false;
         }
         return true;
     });
     newlist.forEach(function (v) {
-        // 2023-11-25 14:06
-        today = v.date.split(" ")[0];
         if (curDate === "") {
-            log("设置当前日期: " + today);
-            curDate = today;
-            yesterdayDate = yesterday(today);
+            // 2023-11-25 14:06
+            curDate = v.date.split(" ")[0];
+            minDateTime = yesterday(curDate) + " 21:20";
+            log("设置: 当前日期=%s 最小日期=%s", curDate, minDateTime);
         }
         if (totallist[v.id]) {
             return;
         }
-        // log("新订单: " + JSON.stringify(v));
         log("新订单: " + v.id);
         totallist[v.id] = v;
     });
@@ -347,7 +374,7 @@ while (true) {
     sleep(100);
 
     // 等待 “加载中” 消失
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 50; i++) {
         var loading = selector().textContains("加载中").findOnce();
         if (loading) {
             sleep(300);
