@@ -68,6 +68,19 @@ function parseItemMeta(node, into) {
                 if (val.indexOf("今天") != -1) {
                     val = val.replace("今天", nowDate());
                 }
+                // case of 2023-11-1
+                var m = /(\d+)-(\d+)-(\d+)/.exec(val);
+                if (m) {
+                    var month = m[2];
+                    var day = m[3];
+                    if (month.length == 1) {
+                        month = "0" + month;
+                    }
+                    if (day.length == 1) {
+                        day = "0" + day;
+                    }
+                    val = m[1] + "-" + month + "-" + day;
+                }
                 into.date = val;
                 break;
         }
@@ -118,6 +131,9 @@ function parseItem(node, cond) {
         // 开始解析订单附加信息
         // 附加信息有两种，一种是必填，一种是留言
         addtional: while (true) {
+            if (j >= node.childCount()) {
+                break;
+            }
             key = node.child(j).text();
             switch (key) {
                 case "必填":
@@ -220,20 +236,7 @@ function debug_printTree() {
 }
 
 function yesterday(date) {
-    var m = /(\d+)-(\d+)-(\d+)/.exec(date);
-    if (!m) {
-        return "";
-    }
-    var year = m[1];
-    var month = m[2];
-    var day = m[3];
-    if (month.length == 1) {
-        month = "0" + month;
-    }
-    if (day.length == 1) {
-        day = "0" + day;
-    }
-    var today = new Date(year + "-" + month + "-" + day);
+    var today = new Date(date);
     today.setTime(today.getTime() - 24 * 60 * 60 * 1000);
     return (
         today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate()
