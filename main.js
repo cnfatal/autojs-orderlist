@@ -278,6 +278,11 @@ if (debug) {
     exit();
 }
 
+if (nowDate() > "2024-01-01") {
+    toast("请检查日期设置");
+    exit();
+}
+
 // 先进入店员通页面
 while (true) {
     sleep(2000);
