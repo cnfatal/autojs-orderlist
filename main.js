@@ -7,9 +7,8 @@ function findTree(node, path, findfunc) {
     if (findfunc(node, path) === true) {
         return node;
     }
-    var children = node.children();
-    for (var j = 0; j < children.length; j++) {
-        var found = findTree(children[j], path + "." + j, findfunc);
+    for (var i = 0; i < node.childCount(); i++) {
+        var found = findTree(node.child(i), path + "." + i, findfunc);
         if (found) {
             return found;
         }
@@ -148,14 +147,14 @@ function parseItem(node, cond) {
                     data.address = node.child(j).text();
                     j++; // skip
                     j++; // skip 复制
-                    j++; // skip 
+                    j++; // skip
                     break;
                 case "留言":
                     j++; // skip
                     data.message = node.child(j).text();
                     j++; // skip
                     j++; // skip
-                    j++; // skip 
+                    j++; // skip
                     break;
                 case "标记完成":
                     data.unfinished = true;
@@ -174,12 +173,17 @@ function parseItem(node, cond) {
 function parseContent(node, cond) {
     list = [];
     listmeta = {};
-    children = node.children();
-    for (var i = 0; i < children.length; i++) {
-        var child = children[i];
+    for (var i = 0; i < node.childCount(); i++) {
+        var child = node.child(i);
         // 第一行是表头
         if (i == 0) {
             for (var j = 0; j < child.childCount(); j++) {
+                item = child.child(j);
+                if (!item) {
+                    log("not found item: " + j);
+                    log(child);
+                    continue;
+                }
                 var val = child.child(j).text();
                 switch (j) {
                     // path: .5, text: 11月25日
@@ -210,15 +214,31 @@ function look(cond) {
             sleep(3000);
         }
     }
-    node = findByPath(".0.0.0.1.1.0.1.1.1.0.0.0");
-    if (node) {
-        return parseContent(node, cond);
-    } else {
-        return [];
+    var node = null;
+    pathes = [
+        ".0.0.0.1.1.0.1.1.1.1.0.0",
+        ".0.0.0.1.1.0.1.1.1.0.0.0"
+    ]
+    for (var i = 0; i < pathes.length; i++) {
+        node = findByPath(pathes[i]);
+        if (node) {
+            break;
+        }
     }
+    if (!node) {
+        toast("未找到订单列表,脚本无法继续执行,请联系作者或更新版本");
+        log("not found path");
+        debug_printTree();
+        exit();
+    }
+    return parseContent(node, cond);
 }
 
 function saveToFile(filename, list) {
+    // order by content
+    list.sort(function (a, b) {
+        return a.content.localeCompare(b.content);
+    });
     var filename = "/sdcard/Documents/" + filename + ".csv";
     var file = open(filename, "w");
     file.write("序号,地址,留言,内容\n");
@@ -269,6 +289,49 @@ function nowDate() {
     );
 }
 
+function enterOrderPage() {
+    // 先进入店员通页面
+    while (true) {
+        sleep(2000);
+        var ok = selector().text("店员通").findOnce();
+        if (!ok) {
+            toast("未找到店员通页面,请先进入店员通页面");
+            app.startActivity({
+                action: "VIEW",
+                data: "alipays://platformapi/startapp?appId=2018030502317554",
+            });
+            continue;
+        }
+        var entry = selector().text("扫码点单").findOnce();
+        if (!entry) {
+            toast("未找到扫码点单,请先进入店员通页面");
+            continue;
+        }
+        toast("进入扫码点单页面");
+        entry.click();
+        sleep(5000);
+        break;
+    }
+    // 检查订单页面
+    while (true) {
+        var ok = selector().text("扫码点单订单").findOnce();
+        if (!ok) {
+            toast("未找到订单页面");
+            var entry = selector().text("扫码点单").findOnce();
+            if (!entry) {
+                toast("未找到扫码点单,请先进入店员通页面");
+                sleep(1000);
+                continue;
+            }
+            entry.click();
+            toast("进入订单页面");
+            sleep(1000);
+            continue;
+        }
+        break;
+    }
+}
+
 let debug = false;
 // debug = true;
 if (debug) {
@@ -277,53 +340,12 @@ if (debug) {
     log(list);
     exit();
 }
-
 if (nowDate() > "2024-01-01") {
     toast("请检查日期设置");
     exit();
 }
 
-// 先进入店员通页面
-while (true) {
-    sleep(2000);
-    var ok = selector().text("店员通").findOnce();
-    if (!ok) {
-        toast("未找到店员通页面,请先进入店员通页面");
-        app.startActivity({
-            action: "VIEW",
-            data: "alipays://platformapi/startapp?appId=2018030502317554",
-        });
-        continue;
-    }
-    var entry = selector().text("扫码点单").findOnce();
-    if (!entry) {
-        toast("未找到扫码点单,请先进入店员通页面");
-        continue;
-    }
-    toast("进入扫码点单页面");
-    entry.click();
-    sleep(5000);
-    break;
-}
-
-// 检查订单页面
-while (true) {
-    var ok = selector().text("扫码点单订单").findOnce();
-    if (!ok) {
-        toast("未找到订单页面");
-        var entry = selector().text("扫码点单").findOnce();
-        if (!entry) {
-            toast("未找到扫码点单,请先进入店员通页面");
-            sleep(1000);
-            continue;
-        }
-        entry.click();
-        toast("进入订单页面");
-        sleep(1000);
-        continue;
-    }
-    break;
-}
+enterOrderPage();
 
 setScreenMetrics(1080, 1920);
 
