@@ -217,7 +217,8 @@ function look(cond) {
     var node = null;
     pathes = [
         ".0.0.0.1.1.0.1.1.1.1.0.0",
-        ".0.0.0.1.1.0.1.1.1.0.0.0"
+        ".0.0.0.1.1.0.1.1.1.0.0.0",
+        ".0.0.0.1.1.0.0.1.1.0.0.0"
     ]
     for (var i = 0; i < pathes.length; i++) {
         node = findByPath(pathes[i]);
